@@ -23,7 +23,7 @@ from model import build_model
 SEED = 42
 
 
-def load_model(ckpt='checkpoints/best.pth', config='checkpoints/config.json',
+def load_model(ckpt='weights/model_weights.pth', config='',
                device=None):
     """§9: zero manual edits required."""
     device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
@@ -31,10 +31,13 @@ def load_model(ckpt='checkpoints/best.pth', config='checkpoints/config.json',
         print('[warn] CUDA unavailable — running on CPU. '
               'Latency numbers will not reflect H100.')
     cfg = {}
-    if os.path.exists(config):
-        cfg = json.load(open(config))
+    if config and os.path.exists(config):
+        try:
+            cfg = json.load(open(config))
+        except Exception as e:
+            print(f'[warn] could not read {config} ({e}); using checkpoint defaults.')
     ck = torch.load(ckpt, map_location=device)
-    model = build_model({'width': ck.get('width', cfg.get('width', 40)),
+    model = build_model({'width': ck.get('width', cfg.get('width', 48)),
                          'mdta_blocks': ck.get('mdta_blocks',
                                                cfg.get('mdta_blocks', 2))})
     state = ck.get('ema') or ck.get('model') or ck
@@ -108,8 +111,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--input_dir', required=True)
     ap.add_argument('--output_dir', required=True)
-    ap.add_argument('--ckpt', default='checkpoints/best.pth')
-    ap.add_argument('--config', default='checkpoints/config.json')
+    ap.add_argument('--ckpt', default='weights/model_weights.pth')
+    ap.add_argument('--config', default='')
     ap.add_argument('--adaptive_tta', type=lambda s: s.lower() != 'false',
                     default=True)
     ap.add_argument('--threshold', type=float, default=None,
