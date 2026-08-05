@@ -31,11 +31,8 @@ def load_model(ckpt='checkpoints/best.pth', config='checkpoints/config.json',
         print('[warn] CUDA unavailable — running on CPU. '
               'Latency numbers will not reflect H100.')
     cfg = {}
-    if config and os.path.exists(config):
-        try:
-            cfg = json.load(open(config))
-        except Exception as e:
-            print(f'[warn] could not read {config} ({e}); using checkpoint defaults.')
+    if os.path.exists(config):
+        cfg = json.load(open(config))
     ck = torch.load(ckpt, map_location=device)
     model = build_model({'width': ck.get('width', cfg.get('width', 40)),
                          'mdta_blocks': ck.get('mdta_blocks',

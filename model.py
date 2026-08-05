@@ -239,6 +239,15 @@ class MAGNAFLite(nn.Module):
             blk.drop_path.drop_prob = p3
 
     def forward(self, x, need_aux=False):
+        # --- size guard: the encoder downsamples twice, so H,W must be
+        # divisible by 4 for the decoder's skip shapes to line up. Arbitrary
+        # inputs (e.g. 171x171 from a 1.5x downsample) are reflect-padded here
+        # and the output is cropped back, so ANY input size works.
+        h0, w0 = x.shape[-2:]
+        ph, pw = (-h0) % 4, (-w0) % 4
+        if ph or pw:
+            x = F.pad(x, (0, pw, 0, ph), mode='reflect')
+
         # bicubic base — locked to align_corners=False (§6a)
         base = F.interpolate(x, scale_factor=2, mode='bicubic',
                              align_corners=False)
@@ -264,6 +273,12 @@ class MAGNAFLite(nn.Module):
         feat = self.sr(d1)                      # 2x spatial
         head = self.image_head(feat)
         residual, log_var = head[:, :1], head[:, 1:]
+
+        # crop away the padding contribution (2x because of the SR head)
+        if ph or pw:
+            residual = residual[..., :2 * h0, :2 * w0]
+            log_var = log_var[..., :2 * h0, :2 * w0]
+            base = base[..., :2 * h0, :2 * w0]
 
         out = {'output': base + residual, 'log_var': log_var}
         if need_aux:
