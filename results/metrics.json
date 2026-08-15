@@ -2,7 +2,7 @@
   "protocol": "texture-family holdout (pre-registered), n=650",
   "psnr": 27.554,
   "ssim": 0.7725,
-  "lpips": 0.172,
+  "lpips": 0.1689,
   "bicubic": {
     "psnr": 19.864,
     "ssim": 0.4093,
@@ -19,7 +19,7 @@
   "three_fold_leave_one_cluster_out": {
     "psnr": 29.187,
     "ssim": 0.7587,
-    "lpips": 0.1711,
+    "lpips": 0.1702,
     "coverage": "2269/3200"
   },
   "random_80_20_matched_protocol": {
@@ -49,5 +49,6 @@
     "nan": 0,
     "blank": 0,
     "n": 400
-  }
+  },
+  "inference_default": "single-pass (adaptive TTA off)"
 }

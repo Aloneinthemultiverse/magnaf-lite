@@ -19,15 +19,15 @@ from. Protocols are not interchangeable — see [PROTOCOL.md](PROTOCOL.md).
 
 | protocol | PSNR ↑ | SSIM ↑ | LPIPS ↓ |
 |---|---|---|---|
-| **Three-fold leave-one-cluster-out** (71 % of the dataset) | **29.187** | 0.7587 | 0.1711 |
+| **Three-fold leave-one-cluster-out** (71 % of the dataset) | **29.187** | 0.7587 | 0.1702 |
 | Random 80/20 — the split most teams report on | 29.017 | 0.7813 | 0.1397 |
-| **Texture-family holdout — pre-registered, our headline** | **27.554** | **0.7725** | **0.1720** |
+| **Texture-family holdout — pre-registered, our headline** | **27.554** | **0.7725** | **0.1689** |
 | Strict three-way split (test never used for selection) | 27.550 | 0.7771 | 0.1713 |
 | Leak-free duplicate-group split (verified 0 % leakage) | 27.527 | 0.7775 | 0.1679 |
 | Bicubic baseline, same 650 images | 19.864 | 0.4093 | 0.5248 |
 
 On the pre-registered holdout: **+7.69 dB over bicubic**, **+4.85 dB over the
-best classical method** (Gaussian blur, 22.70), **67 % LPIPS reduction**, and
+best classical method** (Gaussian blur, 22.70), **68 % LPIPS reduction**, and
 **649 / 650** images improved.
 
 Classical baselines on the identical 650: gaussian 22.70 · bilinear 21.71 ·
@@ -46,8 +46,8 @@ during training. Size-weighted over the three folds run:
 |---|---|---|---|---|
 | cluster 1 | 835 | 30.158 | 0.7080 | 0.1938 |
 | cluster 0 | 784 | 29.508 | 0.8013 | 0.1461 |
-| cluster 3 *(pre-registered)* | 650 | 27.554 | 0.7725 | 0.1720 |
-| **weighted mean** | **2269** | **29.187** | **0.7587** | **0.1711** |
+| cluster 3 *(pre-registered)* | 650 | 27.554 | 0.7725 | 0.1689 |
+| **weighted mean** | **2269** | **29.187** | **0.7587** | **0.1702** |
 
 Coverage 2269 / 3200 images (70.9 %). Folds for clusters 2, 4 and 5 were not run
 — compute budget — so this is a **three-fold** result, not a complete six-fold
@@ -67,7 +67,7 @@ All on the pre-registered 650-image holdout.
 |---|---|---|---|---|---|
 | 1.302 M | 5.2 MB | 27.482 | 0.7694 | 0.1826 | stopped at epoch 72/120 |
 | 2.018 M | 8.1 MB | 27.393 | 0.7726 | 0.1734 | |
-| **2.891 M** | **11.6 MB** | **27.554** | **0.7725** | **0.1720** | **shipped** |
+| **2.891 M** | **11.6 MB** | **27.554** | **0.7725** | **0.1689** | **shipped** |
 | 7.455 M | 29.8 MB | 27.558 | — | — | capacity ablation |
 
 **A 5.7× parameter range spans 0.17 dB, and it is not monotonic** — the 1.302 M
@@ -127,7 +127,7 @@ was diagnosed and fixed by extending augmentation to cover the input range
 (see [Robustness engineering](#robustness-engineering)).
 
 Test-time augmentation is available but **off by default**: 4-flip TTA gains
-0.08 dB PSNR while *worsening* LPIPS (0.1720 → 0.1802) at 4× the cost — a
+0.008 dB PSNR while *worsening* LPIPS (0.1689 → 0.1711) at 1.6× the wall-clock — a
 measured decision, not an omission.
 
 ---
