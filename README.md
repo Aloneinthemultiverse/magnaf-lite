@@ -14,18 +14,100 @@ and 256→512.**
 
 ## Results
 
-Measured on a **held-out texture cluster** — images excluded from training at
-the cluster level, verified zero file overlap (see [OOD split](#ood-proxy-validation)).
+Every number below is measured, and each is labelled with the protocol it came
+from. Protocols are not interchangeable — see [PROTOCOL.md](PROTOCOL.md).
 
-| Method | PSNR ↑ | SSIM ↑ | LPIPS ↓ |
+| protocol | PSNR ↑ | SSIM ↑ | LPIPS ↓ |
 |---|---|---|---|
-| Bicubic upsample | 20.135 | 0.4324 | 0.5160 |
-| Bicubic + NL-means | 20.906 | — | — |
-| Bicubic + median filter | 22.109 | — | — |
-| **MAG-NAF-Lite** | **26.920** | **0.7673** | **0.1665** |
+| **Three-fold leave-one-cluster-out** (71 % of the dataset) | **29.187** | 0.7587 | 0.1711 |
+| Random 80/20 — the split most teams report on | 29.017 | 0.7813 | 0.1397 |
+| **Texture-family holdout — pre-registered, our headline** | **27.554** | **0.7725** | **0.1720** |
+| Strict three-way split (test never used for selection) | 27.550 | 0.7771 | 0.1713 |
+| Leak-free duplicate-group split (verified 0 % leakage) | 27.527 | 0.7775 | 0.1679 |
+| Bicubic baseline, same 650 images | 19.864 | 0.4093 | 0.5248 |
 
-**+6.79 dB over bicubic · +4.81 dB over the best classical pipeline · 68 % LPIPS reduction.**
-Improves **650 / 650** held-out images — zero regressions.
+On the pre-registered holdout: **+7.69 dB over bicubic**, **+4.85 dB over the
+best classical method** (Gaussian blur, 22.70), **67 % LPIPS reduction**, and
+**649 / 650** images improved.
+
+Classical baselines on the identical 650: gaussian 22.70 · bilinear 21.71 ·
+median 21.62 · bicubic 19.86 · nearest 18.56 · unsharp 16.81.
+
+The three-way and leak-free runs agree with the headline to within 0.03 dB, so
+the number is inflated neither by selecting a checkpoint on the reported set nor
+by residual near-duplicate leakage. Both were measured rather than assumed.
+
+### Cross-validation across texture families
+
+Each fold withholds one entire texture family; the model never sees that family
+during training. Size-weighted over the three folds run:
+
+| fold held out | n | PSNR ↑ | SSIM ↑ | LPIPS ↓ |
+|---|---|---|---|---|
+| cluster 1 | 835 | 30.158 | 0.7080 | 0.1938 |
+| cluster 0 | 784 | 29.508 | 0.8013 | 0.1461 |
+| cluster 3 *(pre-registered)* | 650 | 27.554 | 0.7725 | 0.1720 |
+| **weighted mean** | **2269** | **29.187** | **0.7587** | **0.1711** |
+
+Coverage 2269 / 3200 images (70.9 %). Folds for clusters 2, 4 and 5 were not run
+— compute budget — so this is a **three-fold** result, not a complete six-fold
+cross-validation, and is reported as such.
+
+**Per-fold spread is 2.60 dB from holdout choice alone**, on identical
+architecture, recipe and code. This is why cluster-holdout numbers cannot be
+compared across teams without the identical split file, which is why ours is
+published. Note also that the ranking inverts by metric: cluster 1 has the best
+PSNR and the *worst* SSIM and LPIPS of the three.
+
+### Model size
+
+All on the pre-registered 650-image holdout.
+
+| params | size | PSNR ↑ | SSIM ↑ | LPIPS ↓ | notes |
+|---|---|---|---|---|---|
+| 1.302 M | 5.2 MB | 27.482 | 0.7694 | 0.1826 | stopped at epoch 72/120 |
+| 2.018 M | 8.1 MB | 27.393 | 0.7726 | 0.1734 | |
+| **2.891 M** | **11.6 MB** | **27.554** | **0.7725** | **0.1720** | **shipped** |
+| 7.455 M | 29.8 MB | 27.558 | — | — | capacity ablation |
+
+**A 5.7× parameter range spans 0.17 dB, and it is not monotonic** — the 1.302 M
+model beats the 2.018 M one. This task is not capacity-limited at 3 200 images,
+which is why 2.891 M is a justified choice rather than a compromise. Doubling
+the training observations via synthetic degradation draws gave −0.06 dB,
+confirming the same ceiling from the data side.
+
+### Cross-domain — real semiconductor imagery
+
+32 SEM / die-shot / wafer images from Wikimedia Commons, degraded with the
+forward model regressed from 400 real KLA pairs, identical inputs for every
+model. None of these images appear in training.
+
+| model | PSNR ↑ | SSIM ↑ | LPIPS ↓ |
+|---|---|---|---|
+| **2.891 M, pre-registered holdout (shipped)** | **23.786** | **0.6651** | **0.2805** |
+| 1.302 M, same holdout | 23.843 | 0.6672 | 0.2813 |
+| 2.891 M, trained on a random 80/20 split | 23.181 | 0.6357 | 0.2953 |
+| bicubic | 19.971 | 0.4868 | 0.4986 |
+
+**+3.82 dB over bicubic on a domain the model never trained on**, 87 / 89 crops
+improved. The model trained with a random split scores *higher* on its own
+validation set (29.017 vs 27.554) yet is **0.6 dB worse here** — a random split
+selects the weaker model for the target domain.
+
+### Latency and failure rate
+
+| | value |
+|---|---|
+| latency, NVIDIA T4, 256×256, batch 1, cuda-synchronised | **16.86 ms / image** |
+| 400 test images, end to end | **6.74 s** |
+| 4-flip TTA (optional, off by default) | 64.36 ms / image |
+| model size on disk | 11.7 MB |
+| non-finite outputs over the 400 test images | **0 / 400** |
+| blank outputs over the 400 test images | **0 / 400** |
+
+CPU timings are not quoted: repeated measurements on this workload varied by
+more than 2× between runs, so only the T4 figures are reported. H100 numbers
+would be extrapolation and are not quoted either.
 
 ### Noise robustness
 
@@ -44,27 +126,9 @@ hardest. An earlier variant collapsed to −11.11 dB at σ=0.20; that failure mo
 was diagnosed and fixed by extending augmentation to cover the input range
 (see [Robustness engineering](#robustness-engineering)).
 
-### Cross-domain: real SEM micrographs
-
-Trained only on the provided dataset, evaluated on **real scanning-electron
-micrographs** from Wikimedia Commons and the KLA briefing deck:
-
-| Image | Bicubic | **Model** | Gain |
-|---|---|---|---|
-| SEM chip (TM3030) | 19.03 | **26.39** | **+7.36 dB** |
-| SEM die (1886VE10) | 19.81 | **21.91** | **+2.10 dB** |
-| KLA deck die | 24.81 | **27.73** | **+2.92 dB** |
-| **Mean** | — | — | **+4.13 dB** |
-
-### Latency (NVIDIA T4, measured)
-
-| Mode | 128→256 |
-|---|---|
-| Single pass (default) | **16.86 ms** (p95 18.23) |
-| 4-flip TTA | 64.36 ms |
-
-Single-pass is shipped. TTA improves PSNR by 0.08 dB but *worsens* LPIPS
-(0.1665 → 0.1802) at 4× the cost — a measured decision, not an omission.
+Test-time augmentation is available but **off by default**: 4-flip TTA gains
+0.08 dB PSNR while *worsening* LPIPS (0.1720 → 0.1802) at 4× the cost — a
+measured decision, not an omission.
 
 ---
 
@@ -92,15 +156,36 @@ ready to use. Expected output:
 
 Weights are committed in `weights/` (11.7 MB) — no external download needed.
 
-### Restore images
+### Restore images — the evaluation entry point
 
 ```bash
+pip install -r requirements-runtime.txt
 python inference.py --input_dir <degraded_dir> --output_dir <out_dir>
 ```
 
-Reads `.npy` (float32) and writes `.npy` at 2× resolution. Add `--png` to also
-emit 8-bit PNGs. Defaults to `weights/model_weights.pth`, EMA weights, CPU
-fallback with a warning if CUDA is absent.
+**No other arguments are needed and no file needs editing.** Defaults resolve
+relative to `inference.py` itself, not the working directory, so this runs from
+any cwd on a fresh clone.
+
+Reads `.npy` (float32, any size) and writes `.npy` at 2× resolution, float32 in
+[0, 1], one file per input with the same filename. Add `--png` to also emit
+8-bit PNGs. Uses the committed EMA weights at `weights/model_weights.pth`
+(11.7 MB, no external download), runs fp16 on CUDA, and falls back to CPU with a
+warning if CUDA is absent.
+
+Verified on a clean run over the full 400-image test set: **400/400 written,
+0 non-finite, 0 blank, all 256×256 float32 in [0.0000, 1.0000]**.
+
+**Dependencies.** `requirements-runtime.txt` is the three-package runtime set
+(torch, numpy, Pillow) needed for inference. `requirements.txt` is the complete
+`pip freeze` of the development environment, included for reproducibility as the
+brief requires; training itself ran on Kaggle's standard PyTorch image.
+
+### Restored test outputs
+
+`results/restored_test/` contains this model's output for all 400 competition
+test images, produced by the command above with no arguments beyond the two
+paths.
 
 ### Evaluate against ground truth
 
@@ -254,15 +339,20 @@ the clean case.
 ## Repository layout
 
 ```
-model.py          architecture (run `python model.py` to print params/shapes)
-dataset.py        paired loader, augmentation, OOD-proxy split
-losses.py         loss suite + λ₃/λ₄ schedules
-train.py          training loop — AMP, EMA, cosine LR, NaN guards
-inference.py      batch restoration, optional adaptive TTA
-evaluate.py       PSNR / SSIM / LPIPS against ground truth
-weights/          trained EMA weights (11.7 MB)
-results/          metrics.json + sample outputs
-assets/           qualitative comparisons
+inference.py            EVALUATION ENTRY POINT — --input_dir / --output_dir, no edits needed
+train.py                training loop — AMP, EMA, cosine LR, NaN guards
+model.py                architecture (run `python model.py` to print params/shapes)
+dataset.py              paired loader, augmentation, texture-cluster split
+losses.py               loss suite + lambda schedules
+evaluate.py             PSNR / SSIM / LPIPS against ground truth
+audit.py                standard battery: cross-domain + NaN/blank audit
+PROTOCOL.md             evaluation protocol, reproducible by other teams
+weights/                model_weights.pth (11.7 MB) + config.json
+results/restored_test/  our output for all 400 competition test images
+results/metrics.json    headline metrics
+requirements-runtime.txt  3 packages needed to run inference
+requirements.txt        full pip freeze, for reproducibility
+assets/                 qualitative comparisons
 ```
 
 ---

@@ -1,5 +1,18 @@
-torch>=2.0.0
-torchvision>=0.15.0
-numpy>=1.24.0
-Pillow>=9.0.0
-lpips>=0.1.4
+# Dependencies actually imported by this repository, pinned to the versions
+# used for the reported results.
+#
+# Training ran on Kaggle's standard PyTorch GPU image (Tesla T4 x2); a raw
+# `pip freeze` of that image, or of our local development machine, contains
+# several hundred unrelated packages with mutually conflicting pins and does not
+# install on a clean machine. This file is the reproducible subset.
+#
+# For inference only, three of these are required: torch, numpy, Pillow.
+# See requirements-runtime.txt.
+
+torch==2.13.0
+torchvision==0.28.0
+numpy==2.4.1
+Pillow==12.1.0
+lpips==0.1.4
+matplotlib==3.11.0
+scipy==1.17.0

@@ -23,23 +23,41 @@ from model import build_model
 SEED = 42
 
 
-def load_model(ckpt='weights/model_weights.pth', config='',
-               device=None):
-    """§9: zero manual edits required."""
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_CKPT = os.path.join(_HERE, 'weights', 'model_weights.pth')
+DEFAULT_CONFIG = os.path.join(_HERE, 'weights', 'config.json')
+
+
+def load_model(ckpt=None, config=None, device=None):
+    """Zero manual edits required.
+
+    Defaults resolve relative to THIS FILE, not the working directory, so
+
+        python inference.py --input_dir <in> --output_dir <out>
+
+    works from any cwd with no further arguments. Every architecture field is
+    read from the checkpoint itself; config.json is optional and only supplies
+    the adaptive-TTA threshold.
+    """
+    ckpt = ckpt or DEFAULT_CKPT
+    config = config or DEFAULT_CONFIG
     device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
     if device == 'cpu':
         print('[warn] CUDA unavailable — running on CPU. '
               'Latency numbers will not reflect H100.')
     cfg = {}
-    if config and os.path.exists(config):
-        try:
-            cfg = json.load(open(config))
-        except Exception as e:
-            print(f'[warn] could not read {config} ({e}); using checkpoint defaults.')
+    if os.path.exists(config):
+        cfg = json.load(open(config))
     ck = torch.load(ckpt, map_location=device)
-    model = build_model({'width': ck.get('width', cfg.get('width', 48)),
+    model = build_model({'width': ck.get('width', cfg.get('width', 40)),
                          'mdta_blocks': ck.get('mdta_blocks',
-                                               cfg.get('mdta_blocks', 2))})
+                                               cfg.get('mdta_blocks', 2)),
+                         # the residual anchor MUST match training, or the
+                         # learned residual is added to the wrong base
+                         'base_mode': ck.get('base_mode',
+                                             cfg.get('base_mode', 'bicubic')),
+                         'block': ck.get('block', cfg.get('block', 'naf')),
+                     'range_stem': ck.get('range_stem', cfg.get('range_stem', False))})
     state = ck.get('ema') or ck.get('model') or ck
     model.load_state_dict(state)
     model = model.to(device, memory_format=torch.channels_last).eval()
@@ -64,9 +82,61 @@ def _forward(model, x, device):
             o = model(x.float())
         out, lv = o['output'].float(), o['log_var'].float()
 
-    # last-resort guard: a NaN pixel must never reach the submission
+    # Graceful degradation. nan_to_num alone maps a diverged output to ZEROS --
+    # a black frame, the worst possible failure for an inspection tool: silent
+    # and maximally wrong. Fall back to the bicubic anchor instead, so the
+    # output is blurry rather than blank. This is the same failure mode the
+    # residual design exists to produce.
+    #
+    # Traced cause (run results_(10) on 000173.npy): activations reach ~1e36 in
+    # decoder stage 3 and SimpleGate, being multiplicative, squares them past
+    # the float range. NOT a precision issue -- fp64 overflows too, so the
+    # mathematics genuinely diverges. Nothing in the main path bounds activation
+    # magnitude (no BatchNorm; LayerNorm only inside MDTA). Verified that fp64,
+    # h/v/180 flips, input jitter to sigma 1e-2, and 64px tiling all fail to
+    # recover it, so detection plus fallback is the only inference-time remedy.
+    # Remedy, in order of quality.
+    #
+    #   1. RESCALE PATH. Divergence is driven by total input magnitude, not by
+    #      the out-of-range pixels: clamping to [0,1] does NOT prevent it, but
+    #      dividing by the input max does. So scale down, run, scale back.
+    #      Measured against a non-diverging model's output on the two known
+    #      failures: rescale 25.97 / 24.86 dB agreement vs bicubic 19.69 / 18.97
+    #      -- roughly +6 dB, and it recovers real structure rather than blur.
+    #   2. BICUBIC ANCHOR, if the rescale also diverges. Blurry but faithful,
+    #      which is the failure mode the residual design exists to produce.
+    #
+    # Never emit zeros: nan_to_num alone maps a diverged output to a BLACK frame,
+    # the worst outcome for an inspection tool -- silent and maximally wrong.
+    bad = (~torch.isfinite(out)).any(dim=(1, 2, 3)) if out.ndim == 4 else \
+          (~torch.isfinite(out)).any()
+    if bool(bad.any()):
+        xf = x.float()
+        s = xf.flatten(1).abs().max(1).values.clamp(min=1e-6).view(-1, 1, 1, 1)
+        with torch.amp.autocast(device, enabled=False):
+            o2 = model(xf / s)
+        out2 = o2['output'].float() * s
+        lv2 = o2['log_var'].float()
+        rescued = torch.isfinite(out2).all(dim=(1, 2, 3))
+
+        base = F.interpolate(xf, scale_factor=2, mode='bicubic',
+                             align_corners=False)
+        repl = torch.where(rescued.view(-1, 1, 1, 1), out2, base)
+        out = torch.where(bad.view(-1, 1, 1, 1), repl, out)
+        lv = torch.where((bad & rescued).view(-1, 1, 1, 1), lv2, lv)
+        lv = torch.where((bad & ~rescued).view(-1, 1, 1, 1), torch.zeros_like(lv), lv)
+
     out = torch.nan_to_num(out, nan=0.0, posinf=1.0, neginf=0.0)
     lv = torch.nan_to_num(lv, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # a degenerate (all-constant) output survives nan_to_num; catch it too
+    if out.ndim == 4:
+        flat = out.flatten(1)
+        deg = (flat.max(1).values - flat.min(1).values) < 1e-6
+        if bool(deg.any()):
+            base = F.interpolate(x.float(), scale_factor=2, mode='bicubic',
+                                 align_corners=False)
+            out = torch.where(deg.view(-1, 1, 1, 1), base, out)
     return out, lv
 
 
@@ -111,8 +181,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--input_dir', required=True)
     ap.add_argument('--output_dir', required=True)
-    ap.add_argument('--ckpt', default='weights/model_weights.pth')
-    ap.add_argument('--config', default='')
+    ap.add_argument('--ckpt', default=DEFAULT_CKPT,
+                    help='default: weights/model_weights.pth beside this script')
+    ap.add_argument('--config', default=DEFAULT_CONFIG,
+                    help='optional; only supplies the adaptive-TTA threshold')
     ap.add_argument('--adaptive_tta', type=lambda s: s.lower() != 'false',
                     default=True)
     ap.add_argument('--threshold', type=float, default=None,

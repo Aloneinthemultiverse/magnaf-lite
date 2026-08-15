@@ -1,0 +1,9 @@
+{
+  "width": 48,
+  "mdta_blocks": 2,
+  "adaptive_tta_threshold": -2.5202105522155756,
+  "epoch": 69,
+  "val_psnr": 27.553542435749062,
+  "val_ssim": 0.7725072491627473,
+  "seed": 42
+}

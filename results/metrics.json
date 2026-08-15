@@ -1,13 +1,53 @@
 {
-  "n_images": 12,
+  "protocol": "texture-family holdout (pre-registered), n=650",
+  "psnr": 27.554,
+  "ssim": 0.7725,
+  "lpips": 0.172,
   "bicubic": {
-    "psnr": 19.890511574330286,
-    "ssim": 0.40583379318316776,
-    "lpips": 0.5047238270441691
+    "psnr": 19.864,
+    "ssim": 0.4093,
+    "lpips": 0.5248
   },
-  "model": {
-    "psnr": 25.938709235762527,
-    "ssim": 0.7797655115524927,
-    "lpips": 0.16750013455748558
+  "improved_over_bicubic": "649/650",
+  "distribution": {
+    "min": 11.53,
+    "p10": 20.69,
+    "median": 27.41,
+    "p90": 35.16,
+    "max": 41.06
+  },
+  "three_fold_leave_one_cluster_out": {
+    "psnr": 29.187,
+    "ssim": 0.7587,
+    "lpips": 0.1711,
+    "coverage": "2269/3200"
+  },
+  "random_80_20_matched_protocol": {
+    "psnr": 29.017,
+    "ssim": 0.7813,
+    "lpips": 0.1397
+  },
+  "strict_three_way_split": {
+    "psnr": 27.55,
+    "ssim": 0.7771,
+    "lpips": 0.1713
+  },
+  "leak_free_split": {
+    "psnr": 27.527,
+    "ssim": 0.7775,
+    "lpips": 0.1679
+  },
+  "cross_domain_real_semiconductor": {
+    "psnr": 23.786,
+    "gain_over_bicubic": 3.815,
+    "sources": 32
+  },
+  "params": 2891000,
+  "model_size_mb": 11.7,
+  "latency_ms_t4": 16.86,
+  "test_set_failures": {
+    "nan": 0,
+    "blank": 0,
+    "n": 400
   }
 }
