@@ -2,8 +2,10 @@
 
   python inference.py --input_dir <in> --output_dir <out>
 
-Defaults per §9: EMA weights, adaptive TTA on, threshold from config.json,
-seed 42. Falls back to CPU with a warning if CUDA is absent.
+Defaults: EMA weights, SINGLE-PASS (adaptive TTA off), seed 42. Falls back to
+CPU with a warning if CUDA is absent. Pass --adaptive_tta true to enable
+uncertainty-triggered 4-flip TTA (fires on ~20% of images, 1.6x wall-clock,
++0.008 dB PSNR, worse LPIPS -- measured, which is why it is off).
 
 Output format: float32 .npy matching GT (the KLA train set is .npy in [0,1]).
 Use --png to additionally write uint8 grayscale PNGs in [0,255].
@@ -185,8 +187,13 @@ def main():
                     help='default: weights/model_weights.pth beside this script')
     ap.add_argument('--config', default=DEFAULT_CONFIG,
                     help='optional; only supplies the adaptive-TTA threshold')
+    # OFF by default. Measured on the 650-image held-out family: adaptive TTA
+    # fires on exactly 20% of images (the threshold is the 80th percentile of
+    # validation uncertainty), costs 1.6x wall-clock, gains +0.008 dB PSNR and
+    # WORSENS LPIPS 0.1689 -> 0.1711. Single-pass is what we report and what we
+    # ship. Pass --adaptive_tta true to enable it.
     ap.add_argument('--adaptive_tta', type=lambda s: s.lower() != 'false',
-                    default=True)
+                    default=False)
     ap.add_argument('--threshold', type=float, default=None,
                     help='override config.json threshold')
     ap.add_argument('--force_tta', action='store_true')
