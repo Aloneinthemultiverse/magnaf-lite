@@ -432,14 +432,62 @@ Fixed seed 42. EMA weights used by default. Training on 2× T4 (Kaggle),
 
 ## Known limitations
 
+- **Unbounded activations.** The gated block carries no normalisation, so on
+  1–2 of 400 inputs some trained weight sets diverge in decoder stage 3.
+  Diagnosed rather than patched: the driver is *total input magnitude*, not
+  out-of-range pixels — clamping to [0,1] does **not** prevent it, uniform
+  rescaling does. It is not a precision artefact, since fp64 overflows
+  identically, and flips, input jitter to σ=1e-2 and 64 px tiling all fail to
+  recover it. Inference detects divergence and re-runs on a rescaled input,
+  recovering ~26 dB agreement with a healthy model against ~19 dB for a bicubic
+  fallback. **The shipped model diverges on none of the 400 test images**; two
+  alternative-holdout models do, and are fully recovered.
+- **3.4 % residual near-duplicate leakage** in the pre-registered fold. The
+  released data contains consecutive-frame duplicates that a k-means boundary
+  can split. Measured against a duplicate-group-aware split with verified zero
+  leakage (max val-to-train correlation 0.8996): worth **0.027 dB**.
+- **Output is smoother than ground truth** — gradient energy 0.047 vs 0.075,
+  characteristic of Charbonnier-family losses. Post-hoc sharpening improves
+  perceived detail and costs PSNR (mild −0.013 dB, strong −0.203 dB), so it is
+  not applied.
+- **No deblurring capability.** Blur is not among the three specified
+  degradations and does not appear in the released pairs.
 - **256→512 is verified structurally, not on real 512-GT data** — the released
   training set contains only 128→256 pairs. The network is fully convolutional
   and the path is tested on synthetic 256 inputs, but no real 256→512 pairs
   exist to validate against.
 - **Latency is measured on T4, not H100.** Judging hardware figures would be
   extrapolation; only the measured T4 numbers are reported here.
-- **No ablation study.** Component contributions are argued from design, not
-  measured by removal.
+- **Cross-validation is three-fold, not six.** Folds for clusters 2, 4 and 5
+  were not run for compute reasons, and the result is labelled accordingly.
+- **No baseline trained by us.** Parameter comparisons against Restormer,
+  SwinIR and U-Net use published or third-party figures; we did not train those
+  architectures on this split ourselves. The parameter counts are
+  protocol-independent, but the quality comparison rests on our matched-protocol
+  random-split number (29.017) rather than a controlled head-to-head.
+
+### Ablations
+
+Eleven interventions were tested against the pre-registered holdout; eight
+returned null. Reported because the null results are the finding:
+
+| intervention | Δ PSNR |
+|---|---|
+| capacity 2.891 M → 7.455 M (2.6×) | +0.002 |
+| loss rebalancing (FFT, Sobel weight, λ₃) | +0.02 |
+| bilinear residual anchor | +0.05 (worse LPIPS) |
+| 3-model ensemble | +0.06 |
+| 4-flip test-time augmentation | +0.08 (worse LPIPS) |
+| clipping the loss to match the metric | +0.007 |
+| synthetic multiplicity (2× degradation draws) | −0.06 |
+| second-pass refinement | −0.09 to −0.65 |
+| wide-range augmentation | −0.23 in-distribution (+16.8 at σ=0.40) |
+| tri-branch stem | abandoned — 3.2× slower, no gain |
+| spatially-adaptive modulation blocks | abandoned |
+
+Neither capacity nor degradation coverage moves the result. At 3 200 images this
+task is data-limited, which is why 2.891 M is a justified choice rather than a
+compromise.
 
 ---
 
