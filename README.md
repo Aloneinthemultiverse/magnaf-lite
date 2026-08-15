@@ -356,14 +356,11 @@ was trained on**, the model selected by a random split is **0.6 dB worse**
 (23.181 vs 23.786) across all three metrics, and emits blank frames on 5 of the
 400 competition test images where ours emits none:
 
-| trained with | its own validation | real semiconductor imagery | blank frames / 400 |
-|---|---|---|---|
-| random 80/20 | **29.017** | 23.181 | 5 |
-| texture holdout | 27.554 | **23.786** | **0** |
-
 **A random split does not merely measure the wrong thing — it selects the wrong
-model.** It scores higher on its own validation set while being measurably worse
-on the domain the task is actually about.
+model.** The model it picks scores higher on its own validation set while being
+measurably worse on the domain the task is actually about: **0.6 dB lower on
+real semiconductor imagery** across PSNR, SSIM and LPIPS, and **5 blank frames
+per 400** competition test images against **0** for ours.
 
 #### The honest caveat
 
