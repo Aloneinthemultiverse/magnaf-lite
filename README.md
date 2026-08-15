@@ -304,12 +304,77 @@ Degraded inputs exceed the ground-truth range — measured **max 2.158**,
 no clamping anywhere in the forward pass, SimpleGate is unbounded, and the
 residual head has no output activation. Clipping happens once, at export.
 
-### OOD-proxy validation
+### Texture-family holdout — and why not a random split
 
-Rather than a random split, texture descriptors (neighbour-difference contrast
-+ LBP histogram + intensity statistics) are clustered with k-means (k=6) and
-one entire cluster is held out. This validates against *structurally unseen*
-images, not merely unseen files. Verified: **2550 train / 650 val, zero overlap**.
+**The short version.** A random split gives you *unseen files* of *seen
+content*. Ours gives you *unseen content*. The first cannot detect a
+generalization failure; the second can.
+
+#### How the split is built
+
+1. **Describe each image by its texture.** 21 numbers per image: directional
+   contrast (2), a 16-bin local-binary-pattern histogram, and mean / std / max.
+   Computed on the degraded input — no ground truth is involved, so the split is
+   computable from data available at inference time.
+2. **Z-score every dimension** across all 3 200 images. Without this, brightness
+   dominates the distance and texture becomes invisible.
+3. **k-means, k = 6, seed 42.** Lloyd's algorithm, 40 fixed iterations,
+   initialised from 6 randomly chosen images. Deterministic and reproducible.
+   *(sklearn's KMeans uses k-means++ and restarts, and produces a different
+   partition — use our `ood_split.npz`, do not re-derive.)*
+4. **Hold out the cluster nearest 18 % of the data.** Chosen on size alone,
+   by a rule fixed **before any model existed**. That is what makes the number
+   credible: a flattering cluster could not have been selected after the fact.
+
+Result: **2550 train / 650 val, zero file overlap.**
+
+#### Why it is harder
+
+A random split scatters every texture family across both sides. The model is
+asked to restore content whose structural statistics it has already learned —
+it needs only to generalise to new *pixels*, not to new *structure*. The
+released data makes this worse: it contains near-duplicate frames from
+consecutive captures, so a random draw places 16.1 % of validation images within
+0.90 correlation of a training image (8.8 % above 0.95). Our holdout carries
+5.5 % and 3.4 %.
+
+#### Why it generalises better — measured, not asserted
+
+Same architecture, same recipe, same 80/20 ratio. Only the draw changes:
+
+| | train | val | generalization gap |
+|---|---|---|---|
+| random 80/20 | 29.059 | 29.017 | **0.04 dB** |
+| texture holdout | 29.274 | 27.554 | **1.72 dB** |
+
+A random split reports essentially **no gap** — not because the model
+generalises perfectly, but because there is no unfamiliar content left for it to
+fail on. The measurement has nowhere to go.
+
+The consequence is not academic. On **real semiconductor imagery neither model
+was trained on**, the model selected by a random split is **0.6 dB worse**
+(23.181 vs 23.786) across all three metrics, and emits blank frames on 5 of the
+400 competition test images where ours emits none:
+
+| trained with | its own validation | real semiconductor imagery | blank frames / 400 |
+|---|---|---|---|
+| random 80/20 | **29.017** | 23.181 | 5 |
+| texture holdout | 27.554 | **23.786** | **0** |
+
+**A random split does not merely measure the wrong thing — it selects the wrong
+model.** It scores higher on its own validation set while being measurably worse
+on the domain the task is actually about.
+
+#### The honest caveat
+
+Which family you hold out is worth **2.60 dB** on its own (27.554 to 30.158
+across three folds — see [Cross-validation](#cross-validation-across-texture-families)).
+So a cluster-holdout number is not comparable across teams unless both used the
+identical split file. Ours is published as `ood_split.npz`, and
+[PROTOCOL.md](PROTOCOL.md) documents how to reproduce our evaluation exactly.
+
+For a number that *is* directly comparable to teams using `random_split`, we
+also report **29.017** on the standard random 80/20.
 
 ### Augmentation
 
