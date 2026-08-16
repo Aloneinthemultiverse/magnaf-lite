@@ -76,23 +76,6 @@ which is why 2.891 M is a justified choice rather than a compromise. Doubling
 the training observations via synthetic degradation draws gave −0.06 dB,
 confirming the same ceiling from the data side.
 
-### Cross-domain — real semiconductor imagery
-
-32 SEM / die-shot / wafer images from Wikimedia Commons, degraded with the
-forward model regressed from 400 real KLA pairs, identical inputs for every
-model. None of these images appear in training.
-
-| model | PSNR ↑ | SSIM ↑ | LPIPS ↓ |
-|---|---|---|---|
-| **2.891 M, pre-registered holdout (shipped)** | **23.786** | **0.6651** | **0.2805** |
-| 1.302 M, same holdout | 23.843 | 0.6672 | 0.2813 |
-| 2.891 M, trained on a random 80/20 split | 23.181 | 0.6357 | 0.2953 |
-| bicubic | 19.971 | 0.4868 | 0.4986 |
-
-**+3.82 dB over bicubic on a domain the model never trained on**, 87 / 89 crops
-improved. The model trained with a random split scores *higher* on its own
-validation set (29.017 vs 27.554) yet is **0.6 dB worse here** — a random split
-selects the weaker model for the target domain.
 
 ### Latency and failure rate
 
