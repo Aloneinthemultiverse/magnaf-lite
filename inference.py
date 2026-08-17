@@ -26,8 +26,8 @@ SEED = 42
 
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CKPT = os.path.join(_HERE, 'weights', 'model_weights.pth')
-DEFAULT_CONFIG = os.path.join(_HERE, 'weights', 'config.json')
+DEFAULT_CKPT = os.path.join(_HERE, 'models', 'model_weights.pth')
+DEFAULT_CONFIG = os.path.join(_HERE, 'models', 'config.json')
 
 
 def load_model(ckpt=None, config=None, device=None):

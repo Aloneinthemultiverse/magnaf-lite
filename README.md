@@ -137,27 +137,42 @@ ready to use. Expected output:
                                  [ok]  256x256 -> 512x512
 ```
 
-Weights are committed in `weights/` (11.7 MB) — no external download needed.
+Weights are committed in `models/` (11.7 MB) — no external download needed.
 
 ### Restore images — the evaluation entry point
 
 ```bash
-pip install -r requirements-runtime.txt
-python inference.py --input_dir <degraded_dir> --output_dir <out_dir>
+pip install -r requirements.txt
+python run.py <input-dir> <output-dir>
 ```
 
-**No other arguments are needed and no file needs editing.** Defaults resolve
-relative to `inference.py` itself, not the working directory, so this runs from
-any cwd on a fresh clone.
+**Positional arguments, no flags, no file editing.** The output directory is
+created if it does not exist. Every path resolves relative to `run.py` itself
+rather than the working directory, so this runs from any cwd on a fresh clone.
 
-Reads `.npy` (float32, any size) and writes `.npy` at 2× resolution, float32 in
-[0, 1], one file per input with the same filename. Add `--png` to also emit
-8-bit PNGs. Uses the committed EMA weights at `weights/model_weights.pth`
-(11.7 MB, no external download), runs fp16 on CUDA, and falls back to CPU with a
-warning if CUDA is absent.
+Runs on an NVIDIA GPU with no internet access, no API keys, no additional model
+downloads, no user interaction and no manual configuration — the trained weights
+ship in `models/`.
 
-Verified on a clean run over the full 400-image test set: **400/400 written,
-0 non-finite, 0 blank, all 256×256 float32 in [0.0000, 1.0000]**.
+`inference.py` remains available for development use (`--input_dir` / `--output_dir`,
+optional TTA, uncertainty maps), but **`run.py` is the submission entry point**.
+
+Reads every `.npy` in the input directory (float32, any size, `(H,W)` or
+`(H,W,1)`) and writes one `.npy` per input with the **same filename**, at 2×
+resolution: grayscale `(H*2, W*2)`, float32, values within `[0, 1]`, no NaN or
+Inf. Uses the committed EMA weights in `models/` (11.7 MB), fp16 on CUDA with an
+fp32 retry, CPU fallback with a warning.
+
+Verified over the full 400-image test set:
+
+| check | result |
+|---|---|
+| one output per input, same filenames | 400 / 400 |
+| shape | all (256, 256) |
+| dtype | float32 |
+| values within [0, 1] | [0.0000, 1.0000] |
+| NaN or Inf | none |
+| blank frames | none |
 
 **Dependencies.** `requirements-runtime.txt` is the three-package runtime set
 (torch, numpy, Pillow) needed for inference. `requirements.txt` is the complete
@@ -384,7 +399,8 @@ the clean case.
 ## Repository layout
 
 ```
-inference.py            EVALUATION ENTRY POINT — --input_dir / --output_dir, no edits needed
+run.py                  SUBMISSION ENTRY POINT — python run.py <input-dir> <output-dir>
+inference.py            development entry point — flags, optional TTA, uncertainty maps
 train.py                training loop — AMP, EMA, cosine LR, NaN guards
 model.py                architecture (run `python model.py` to print params/shapes)
 dataset.py              paired loader, augmentation, texture-cluster split
@@ -392,7 +408,7 @@ losses.py               loss suite + lambda schedules
 evaluate.py             PSNR / SSIM / LPIPS against ground truth
 audit.py                standard battery: cross-domain + NaN/blank audit
 PROTOCOL.md             evaluation protocol, reproducible by other teams
-weights/                model_weights.pth (11.7 MB) + config.json
+models/                 model_weights.pth (11.7 MB) + config.json
 results/restored_test/  our output for all 400 competition test images
 results/metrics.json    headline metrics
 requirements-runtime.txt  3 packages needed to run inference
